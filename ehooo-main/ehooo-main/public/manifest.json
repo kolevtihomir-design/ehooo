@@ -1,0 +1,16 @@
+{
+  "short_name": "AI-Покупки",
+  "name": "AI-Покупки — B2B Платформа",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2103/2103633.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#070a12",
+  "background_color": "#070a12"
+}
