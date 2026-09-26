@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: AI-Pokupki warehouse + platforms Lambda
+Description: AI-Pokupki Lambda with API key + JWT
 
 Globals:
   Function:
@@ -17,6 +17,10 @@ Resources:
       Architectures: [arm64]
       Environment:
         Variables:
+          API_KEY: ''
+          JWT_SECRET: ''
+          ADMIN_EMAIL: admin
+          ADMIN_PASSWORD: ''
           WAREHOUSE_PROVIDER: dummyjson
           WAREHOUSE_API_URL: ''
           PLATFORM_API_URL: ''
@@ -25,13 +29,10 @@ Resources:
         Cors:
           AllowOrigins: ['*']
           AllowMethods: [GET, POST]
+          AllowHeaders: ['authorization', 'content-type', 'x-api-key']
       Events:
         Api:
           Type: HttpApi
           Properties:
             Path: /{proxy+}
             Method: ANY
-
-Outputs:
-  FunctionUrl:
-    Value: !GetAtt PokupkiFnUrl.FunctionUrl

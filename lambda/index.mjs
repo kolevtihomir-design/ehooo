@@ -1,12 +1,34 @@
+import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
+
 const TIMEOUT = 8000;
+const PUBLIC = new Set(['status', 'health', 'login', 'options']);
 
 export const handler = async (event = {}) => {
+  if (event.requestContext?.http?.method === 'OPTIONS' || event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers: cors(), body: '' };
+  }
+
   const body = parse(event);
   const action = body.action || fromPath(event) || 'status';
+
   try {
+    if (action === 'login') {
+      const email = String(body.email || '');
+      const password = String(body.password || '');
+      if (!checkPassword(email, password)) return fail(401, 'invalid credentials');
+      const token = signToken({ sub: email || 'admin', role: 'admin' });
+      return ok({ token, expires_in: 86400 * 7 });
+    }
+
+    if (!PUBLIC.has(action)) {
+      const gate = authorize(event, body);
+      if (!gate.ok) return fail(401, gate.error);
+    }
+
     if (action === 'status' || action === 'health') {
       return ok({
         runtime: 'lambda',
+        auth: 'api-key|jwt',
         region: process.env.AWS_REGION || null,
         warehouse: process.env.WAREHOUSE_API_URL ? 'custom' : (process.env.WAREHOUSE_PROVIDER || 'dummyjson'),
         platform: !!process.env.PLATFORM_API_URL,
@@ -26,10 +48,74 @@ export const handler = async (event = {}) => {
   }
 };
 
+function authorize(event, body) {
+  const hdrs = lowerHeaders(event.headers || {});
+  const bearer = (hdrs.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  const apiKey = hdrs['x-api-key'] || body.api_key || '';
+  const expectedKey = process.env.API_KEY || '';
+  if (expectedKey && apiKey && safeEq(apiKey, expectedKey)) return { ok: true, via: 'api-key' };
+  if (bearer && verifyToken(bearer)) return { ok: true, via: 'jwt' };
+  if (!expectedKey && !process.env.JWT_SECRET) return { ok: true, via: 'open-dev' };
+  return { ok: false, error: 'unauthorized' };
+}
+
+function checkPassword(email, password) {
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin';
+  const adminPass = process.env.ADMIN_PASSWORD || '';
+  if (adminPass && safeEq(password, adminPass) && (!email || email === adminEmail)) return true;
+  try {
+    const users = JSON.parse(process.env.API_USERS || '[]');
+    return users.some((u) => u.email === email && u.password === password);
+  } catch {
+    return false;
+  }
+}
+
+function signToken(payload) {
+  const secret = process.env.JWT_SECRET || process.env.API_KEY || 'dev-secret';
+  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = b64url(JSON.stringify({ ...payload, iat: unix(), exp: unix() + 86400 * 7 }));
+  const sig = b64url(createHmac('sha256', secret).update(`${header}.${body}`).digest());
+  return `${header}.${body}.${sig}`;
+}
+
+function verifyToken(token) {
+  const secret = process.env.JWT_SECRET || process.env.API_KEY || 'dev-secret';
+  const parts = String(token).split('.');
+  if (parts.length !== 3) return false;
+  const [h, b, s] = parts;
+  const expect = b64url(createHmac('sha256', secret).update(`${h}.${b}`).digest());
+  if (!safeEq(s, expect)) return false;
+  try {
+    const payload = JSON.parse(Buffer.from(b, 'base64url').toString());
+    return !payload.exp || payload.exp > unix();
+  } catch {
+    return false;
+  }
+}
+
+function safeEq(a, b) {
+  const A = Buffer.from(String(a));
+  const B = Buffer.from(String(b));
+  if (A.length !== B.length) return false;
+  return timingSafeEqual(A, B);
+}
+
+function unix() { return Math.floor(Date.now() / 1000); }
+function b64url(input) {
+  const buf = Buffer.isBuffer(input) ? input : Buffer.from(input);
+  return buf.toString('base64url');
+}
+function lowerHeaders(h) {
+  const out = {};
+  for (const [k, v] of Object.entries(h)) out[k.toLowerCase()] = v;
+  return out;
+}
+
 async function pullWarehouse() {
   const custom = process.env.WAREHOUSE_API_URL;
   if (custom) {
-    const data = await getJson(custom, auth(process.env.WAREHOUSE_API_KEY));
+    const data = await getJson(custom, bearerHdr(process.env.WAREHOUSE_API_KEY));
     return asList(data).map(mapItem);
   }
   const data = await getJson('https://dummyjson.com/products?limit=100');
@@ -47,7 +133,7 @@ async function searchPlatforms(q) {
   ];
   if (process.env.PLATFORM_API_URL) {
     jobs.push(
-      getJson(process.env.PLATFORM_API_URL, auth(process.env.PLATFORM_API_KEY))
+      getJson(process.env.PLATFORM_API_URL, bearerHdr(process.env.PLATFORM_API_KEY))
         .then(d => asList(d).map(p => mapOffer('custom', p)))
         .catch(() => [])
     );
@@ -91,6 +177,7 @@ function fromPath(event) {
   const p = event.rawPath || event.path || '';
   if (p.includes('warehouse')) return 'warehouse.sync';
   if (p.includes('platforms')) return 'platforms.search';
+  if (p.includes('login')) return 'login';
   if (p.includes('health')) return 'health';
   return '';
 }
@@ -99,17 +186,14 @@ function asList(data) {
   if (Array.isArray(data)) return data;
   return data.items || data.products || data.inventory || [];
 }
-
-function auth(key) {
+function bearerHdr(key) {
   return key ? { Authorization: `Bearer ${key}` } : {};
 }
-
 async function getJson(url, headers = {}) {
   const res = await fetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT) });
   if (!res.ok) throw new Error(`${url} ${res.status}`);
   return res.json();
 }
-
 function ok(body) {
   return { statusCode: 200, headers: cors(), body: JSON.stringify({ success: true, ...body }) };
 }
@@ -117,5 +201,11 @@ function fail(statusCode, error) {
   return { statusCode, headers: cors(), body: JSON.stringify({ success: false, error }) };
 }
 function cors() {
-  return { 'content-type': 'application/json', 'access-control-allow-origin': '*' };
+  return {
+    'content-type': 'application/json',
+    'access-control-allow-origin': '*',
+    'access-control-allow-headers': 'authorization,content-type,x-api-key',
+    'access-control-allow-methods': 'GET,POST,OPTIONS',
+  };
 }
+void randomBytes;
