@@ -10,7 +10,7 @@ export default defineConfig(({mode}) => {
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
-    base: '/',
+    base: process.env.GITHUB_PAGES === '1' ? '/ehooo/' : '/',
     resolve: {
       alias: {
         '@': path.resolve(process.cwd(), '.'),
