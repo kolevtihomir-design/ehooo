@@ -15,7 +15,6 @@ export const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-// ── Schema ────────────────────────────────────────────────────
 db.exec(`
   CREATE TABLE IF NOT EXISTS products (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,7 +69,15 @@ db.exec(`
   VALUES (1, 0, 0, 0, 0);
 `);
 
-// ── Products helpers ──────────────────────────────────────────
+const cols = (db.prepare('PRAGMA table_info(products)').all() as any[]).map(c => c.name);
+const addCol = (name: string, ddl: string) => {
+  if (!cols.includes(name)) db.exec(`ALTER TABLE products ADD COLUMN ${ddl}`);
+};
+addCol('sku', "sku TEXT DEFAULT ''");
+addCol('stock_qty', 'stock_qty INTEGER NOT NULL DEFAULT 0');
+addCol('source', "source TEXT NOT NULL DEFAULT 'seed'");
+addCol('last_synced', 'last_synced TEXT');
+
 export function getAllProducts() {
   return db.prepare('SELECT * FROM products WHERE active = 1 ORDER BY id').all();
 }
@@ -105,7 +112,33 @@ export function deleteProduct(id: number) {
   db.prepare("UPDATE products SET active=0,updated_at=datetime('now') WHERE id=?").run(id);
 }
 
-// ── Session helpers ───────────────────────────────────────────
+export function upsertWarehouseItem(p: {
+  sku: string; name: string; category: string; supplier: string;
+  factory_price: number; negotiated_price: number; discount_pct: number;
+  delivery_days: number; warehouse: string; moq: number; weight_kg: number;
+  tags: string; stock_qty: number; source: string;
+}) {
+  const existing = db.prepare("SELECT id FROM products WHERE sku=? AND sku!=''").get(p.sku) as any;
+  if (existing) {
+    db.prepare(`UPDATE products SET name=?,category=?,supplier=?,factory_price=?,negotiated_price=?,
+      discount_pct=?,delivery_days=?,warehouse=?,moq=?,weight_kg=?,tags=?,stock_qty=?,source=?,
+      last_synced=datetime('now'),updated_at=datetime('now'),active=1 WHERE id=?`).run(
+      p.name, p.category, p.supplier, p.factory_price, p.negotiated_price,
+      p.discount_pct, p.delivery_days, p.warehouse, p.moq, p.weight_kg, p.tags,
+      p.stock_qty, p.source, existing.id
+    );
+    return existing.id;
+  }
+  const res = db.prepare(`INSERT INTO products (name,category,supplier,factory_price,negotiated_price,
+    discount_pct,delivery_days,warehouse,moq,weight_kg,tags,sku,stock_qty,source,last_synced)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`).run(
+    p.name, p.category, p.supplier, p.factory_price, p.negotiated_price,
+    p.discount_pct, p.delivery_days, p.warehouse, p.moq, p.weight_kg, p.tags,
+    p.sku, p.stock_qty, p.source
+  );
+  return Number(res.lastInsertRowid);
+}
+
 export function saveSession(token: string, days = 30) {
   const exp = new Date(Date.now() + days * 86400000).toISOString();
   db.prepare('INSERT OR REPLACE INTO paid_sessions (token, expires_at) VALUES (?,?)').run(token, exp);
@@ -116,7 +149,6 @@ export function sessionExists(token: string): boolean {
   return !!row;
 }
 
-// ── Cache helpers ─────────────────────────────────────────────
 export function dbCacheGet<T>(key: string): T | null {
   const row = db.prepare("SELECT data FROM api_cache WHERE cache_key=? AND expires_at > datetime('now')").get(key) as any;
   return row ? JSON.parse(row.data) : null;
@@ -127,7 +159,6 @@ export function dbCacheSet<T>(key: string, data: T, ttlMs: number) {
   db.prepare('INSERT OR REPLACE INTO api_cache (cache_key,data,expires_at) VALUES (?,?,?)').run(key, JSON.stringify(data), exp);
 }
 
-// ── Analytics helpers ─────────────────────────────────────────
 export function getAnalytics() {
   return db.prepare('SELECT * FROM analytics WHERE id=1').get() as any;
 }
