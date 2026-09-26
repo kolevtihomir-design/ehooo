@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AI-Pokupki warehouse + platforms Lambda
+
+Globals:
+  Function:
+    Timeout: 15
+    MemorySize: 256
+    Runtime: nodejs20.x
+
+Resources:
+  PokupkiFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      CodeUri: .
+      Architectures: [arm64]
+      Environment:
+        Variables:
+          WAREHOUSE_PROVIDER: dummyjson
+          WAREHOUSE_API_URL: ''
+          PLATFORM_API_URL: ''
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins: ['*']
+          AllowMethods: [GET, POST]
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+
+Outputs:
+  FunctionUrl:
+    Value: !GetAtt PokupkiFnUrl.FunctionUrl
