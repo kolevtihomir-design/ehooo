@@ -1,20 +1,31 @@
-import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const TIMEOUT = 8000;
-const PUBLIC = new Set(['status', 'health', 'login', 'options']);
+const MAX_BODY = 32_000;
+const PUBLIC = new Set(['status', 'health', 'login']);
+const ACTIONS = new Set(['status', 'health', 'login', 'warehouse.sync', 'platforms.search']);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CTRL = /[\u0000-\u001F\u007F]/;
 
 export const handler = async (event = {}) => {
   if (event.requestContext?.http?.method === 'OPTIONS' || event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: cors(), body: '' };
   }
 
-  const body = parse(event);
-  const action = body.action || fromPath(event) || 'status';
+  const parsed = parse(event);
+  if (parsed.error) return fail(400, parsed.error, parsed.details);
+  const body = parsed.body;
+  const action = String(body.action || fromPath(event) || 'status');
+
+  const actionErr = validateAction(action);
+  if (actionErr.length) return fail(400, 'validation failed', actionErr);
 
   try {
     if (action === 'login') {
-      const email = String(body.email || '');
-      const password = String(body.password || '');
+      const v = validateLogin(body);
+      if (v.length) return fail(400, 'validation failed', v);
+      const email = clean(body.email, 120);
+      const password = clean(body.password, 128);
       if (!checkPassword(email, password)) return fail(401, 'invalid credentials');
       const token = signToken({ sub: email || 'admin', role: 'admin' });
       return ok({ token, expires_in: 86400 * 7 });
@@ -39,8 +50,11 @@ export const handler = async (event = {}) => {
       return ok({ fetched: items.length, items: items.slice(0, 50) });
     }
     if (action === 'platforms.search') {
-      const offers = await searchPlatforms(body.query || body.q);
-      return ok({ count: offers.length, offers });
+      const q = clean(body.query || body.q, 80);
+      const v = validateQuery(q);
+      if (v.length) return fail(400, 'validation failed', v);
+      const offers = await searchPlatforms(q);
+      return ok({ count: offers.length, query: q, offers });
     }
     return fail(400, 'unknown action');
   } catch (e) {
@@ -48,10 +62,37 @@ export const handler = async (event = {}) => {
   }
 };
 
+function validateAction(action) {
+  if (!ACTIONS.has(action)) return [{ field: 'action', message: 'invalid action' }];
+  return [];
+}
+
+function validateLogin(body) {
+  const errs = [];
+  const email = clean(body.email, 120);
+  const password = clean(body.password, 128);
+  if (!email) errs.push({ field: 'email', message: 'required' });
+  else if (email !== 'admin' && !EMAIL_RE.test(email)) errs.push({ field: 'email', message: 'invalid email' });
+  if (password.length < 8) errs.push({ field: 'password', message: 'min 8 chars' });
+  if (CTRL.test(email) || CTRL.test(password)) errs.push({ field: 'input', message: 'control chars' });
+  return errs;
+}
+
+function validateQuery(q) {
+  if (!q) return [{ field: 'query', message: 'required' }];
+  if (q.length < 2) return [{ field: 'query', message: 'min 2 chars' }];
+  if (CTRL.test(q)) return [{ field: 'query', message: 'invalid chars' }];
+  return [];
+}
+
+function clean(v, max) {
+  return String(v ?? '').trim().slice(0, max);
+}
+
 function authorize(event, body) {
   const hdrs = lowerHeaders(event.headers || {});
   const bearer = (hdrs.authorization || '').replace(/^Bearer\s+/i, '').trim();
-  const apiKey = hdrs['x-api-key'] || body.api_key || '';
+  const apiKey = clean(hdrs['x-api-key'] || body.api_key || '', 200);
   const expectedKey = process.env.API_KEY || '';
   if (expectedKey && apiKey && safeEq(apiKey, expectedKey)) return { ok: true, via: 'api-key' };
   if (bearer && verifyToken(bearer)) return { ok: true, via: 'jwt' };
@@ -108,7 +149,7 @@ function b64url(input) {
 }
 function lowerHeaders(h) {
   const out = {};
-  for (const [k, v] of Object.entries(h)) out[k.toLowerCase()] = v;
+  for (const [k, v] of Object.entries(h)) out[String(k).toLowerCase()] = v;
   return out;
 }
 
@@ -124,7 +165,7 @@ async function pullWarehouse() {
 
 async function searchPlatforms(q) {
   const jobs = [
-    getJson(q ? `https://dummyjson.com/products/search?q=${encodeURIComponent(q)}` : 'https://dummyjson.com/products?limit=30')
+    getJson(`https://dummyjson.com/products/search?q=${encodeURIComponent(q)}`)
       .then(d => (d.products || []).map(p => mapOffer('dummyjson', p)))
       .catch(() => []),
     getJson('https://fakestoreapi.com/products')
@@ -139,8 +180,7 @@ async function searchPlatforms(q) {
     );
   }
   const rows = (await Promise.all(jobs)).flat();
-  if (!q) return rows;
-  const s = String(q).toLowerCase();
+  const s = q.toLowerCase();
   return rows.filter(o => o.title.toLowerCase().includes(s));
 }
 
@@ -167,10 +207,18 @@ function mapOffer(platform, p) {
 }
 
 function parse(event) {
-  if (typeof event.body === 'string') {
-    try { return JSON.parse(event.body); } catch { return {}; }
+  let raw = event.body;
+  if (typeof raw === 'string') {
+    if (raw.length > MAX_BODY) return { error: 'payload too large', details: [{ field: 'body', message: 'max 32KB' }] };
+    if (!raw.trim()) return { body: {} };
+    try { raw = JSON.parse(raw); } catch { return { error: 'invalid JSON', details: [{ field: 'body', message: 'malformed JSON' }] }; }
+  } else {
+    raw = raw || event.queryStringParameters || {};
   }
-  return event.body || event.queryStringParameters || event;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { error: 'invalid body', details: [{ field: 'body', message: 'expected object' }] };
+  }
+  return { body: raw };
 }
 
 function fromPath(event) {
@@ -197,8 +245,8 @@ async function getJson(url, headers = {}) {
 function ok(body) {
   return { statusCode: 200, headers: cors(), body: JSON.stringify({ success: true, ...body }) };
 }
-function fail(statusCode, error) {
-  return { statusCode, headers: cors(), body: JSON.stringify({ success: false, error }) };
+function fail(statusCode, error, details) {
+  return { statusCode, headers: cors(), body: JSON.stringify({ success: false, error, details: details || undefined }) };
 }
 function cors() {
   return {
@@ -208,4 +256,3 @@ function cors() {
     'access-control-allow-methods': 'GET,POST,OPTIONS',
   };
 }
-void randomBytes;
