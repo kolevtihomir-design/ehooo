@@ -6,6 +6,7 @@ import {
   MapPin, Clock, Calculator, AlertTriangle, Award,
   LogOut, User, ChevronDown,
 } from 'lucide-react';
+import { useLang, makeFmt, DEMO_QUERIES as DEMO_BY_LANG, LANGS, LANG_META, type Lang } from './i18n';
 
 // ─── Types ───────────────────────────────────────────────────
 interface Product {
@@ -22,9 +23,6 @@ interface AuthUser {
 
 // ─── Config ──────────────────────────────────────────────────
 const API = ''; // relative — Vercel proxies /api/* to Cloud Run
-const fmt = (n: number) => new Intl.NumberFormat('bg-BG', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
-const fmtDec = (n: number) => new Intl.NumberFormat('bg-BG', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-const DEMO_QUERIES = ['хидравлична помпа', 'компресор', 'led прожектор', 'заваръчен апарат', 'cnc рутер'];
 
 // ─── API helpers ──────────────────────────────────────────────
 async function apiPost(path: string, body: object) {
@@ -45,6 +43,10 @@ async function apiGet(path: string, token?: string) {
 
 // ─── App ─────────────────────────────────────────────────────
 export default function App() {
+  const { lang, setLang, t } = useLang();
+  const { fmt, fmtDec } = makeFmt(lang);
+  const DEMO_QUERIES = DEMO_BY_LANG[lang];
+
   const [view, setView] = useState<'search' | 'result' | 'catalog' | 'auth'>('search');
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'confirm'>('login');
   const [query, setQuery] = useState('');
@@ -100,14 +102,14 @@ export default function App() {
         setView('result');
         setTimeout(() => setShowPaywall(true), 2500);
       } else {
-        setError(data.error || 'Няма резултати');
+        setError(data.error || t('err.noResults'));
       }
     } catch {
-      setError('Сървърът не отговаря. Проверете връзката.');
+      setError(t('err.server'));
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, [query, t]);
 
   // ── Auth ──────────────────────────────────────────────────
   const handleRegister = async () => {
@@ -115,7 +117,7 @@ export default function App() {
     const d = await apiPost('/api/auth/register', { email, password });
     setAuthLoading(false);
     if (d.success) { setAuthMode('confirm'); }
-    else setError(d.error || 'Грешка при регистрация');
+    else setError(d.error || t('err.register'));
   };
 
   const handleConfirm = async () => {
@@ -127,7 +129,7 @@ export default function App() {
       setToken(d.token);
       setUser(d.user);
       setView('search');
-    } else setError(d.error || 'Невалиден код');
+    } else setError(d.error || t('err.code'));
   };
 
   const handleLogin = async () => {
@@ -139,7 +141,7 @@ export default function App() {
       setToken(d.token);
       setUser(d.user);
       setView('search');
-    } else setError(d.error || 'Грешен имейл или парола');
+    } else setError(d.error || t('err.login'));
   };
 
   const handleLogout = () => {
@@ -155,7 +157,7 @@ export default function App() {
     setLoading(false);
     if (d.url) window.location.href = d.url;
     else if (d.test_token) alert('Test mode: ' + d.test_token);
-    else setError(d.error || 'Грешка при плащане');
+    else setError(d.error || t('err.pay'));
   };
 
   // ── Catalog filter ────────────────────────────────────────
@@ -166,7 +168,7 @@ export default function App() {
     : catalog;
 
   const planLabel: Record<string, string> = {
-    trial: 'Пробен', starter: 'Стартер', pro: 'Про', business: 'Business'
+    trial: t('plan.trial'), starter: t('plan.starter'), pro: t('plan.pro'), business: t('plan.business')
   };
   const actionsLeft = user ? user.actions_limit - user.actions_used : 0;
 
@@ -192,9 +194,10 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            <LangSwitcher lang={lang} setLang={setLang} />
             <button onClick={() => setView('catalog')}
               className="text-sm text-gray-400 hover:text-white transition-colors px-3 py-1.5">
-              Каталог
+              {t('nav.catalog')}
             </button>
 
             {user ? (
@@ -203,13 +206,13 @@ export default function App() {
                   <div className="text-xs text-gray-400">{user.email}</div>
                   <div className="text-xs">
                     <span className="text-blue-400 font-bold">{planLabel[user.plan] || user.plan}</span>
-                    {user.plan === 'trial' && <span className="text-gray-500 ml-1">· {actionsLeft} действия</span>}
+                    {user.plan === 'trial' && <span className="text-gray-500 ml-1">· {t('nav.actionsLeft', { n: actionsLeft })}</span>}
                   </div>
                 </div>
                 {actionsLeft === 0 && (
                   <button onClick={() => setShowPaywall(true)}
                     className="text-xs font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-full hover:bg-blue-500/20 transition-all">
-                    Надгради
+                    {t('nav.upgrade')}
                   </button>
                 )}
                 <button onClick={handleLogout} className="text-gray-500 hover:text-white transition-colors">
@@ -220,11 +223,11 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <button onClick={() => { setView('auth'); setAuthMode('login'); }}
                   className="text-sm text-gray-400 hover:text-white transition-colors px-3 py-1.5">
-                  Вход
+                  {t('nav.login')}
                 </button>
                 <button onClick={() => setShowPaywall(true)}
                   className="text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/10 border border-blue-500/20 px-4 py-1.5 rounded-full">
-                  от 9.90 EUR / мес →
+                  {t('nav.pricingCta')}
                 </button>
               </div>
             )}
@@ -242,17 +245,17 @@ export default function App() {
               <div className="flex items-center gap-3 mb-8">
                 <User size={20} className="text-blue-400" />
                 <h2 className="text-xl font-black">
-                  {authMode === 'login' ? 'Вход' : authMode === 'register' ? 'Регистрация' : 'Потвърди имейл'}
+                  {authMode === 'login' ? t('auth.title.login') : authMode === 'register' ? t('auth.title.register') : t('auth.title.confirm')}
                 </h2>
               </div>
 
               {authMode !== 'confirm' && (
                 <>
                   <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                    placeholder="имейл@адрес.com"
+                    placeholder={t('auth.emailPh')}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50 mb-3" />
                   <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="парола"
+                    placeholder={t('auth.passwordPh')}
                     onKeyDown={e => e.key === 'Enter' && (authMode === 'login' ? handleLogin() : handleRegister())}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50 mb-5" />
                 </>
@@ -260,7 +263,7 @@ export default function App() {
 
               {authMode === 'confirm' && (
                 <div className="mb-5">
-                  <p className="text-gray-400 text-sm mb-4">Изпратихме 6-цифрен код на <strong>{email}</strong></p>
+                  <p className="text-gray-400 text-sm mb-4">{t('auth.confirmSent')} <strong>{email}</strong></p>
                   <input type="text" value={confirmCode} onChange={e => setConfirmCode(e.target.value)}
                     placeholder="000000" maxLength={6}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-white text-center text-2xl font-mono tracking-widest focus:outline-none focus:border-blue-500/50" />
@@ -274,17 +277,17 @@ export default function App() {
                 disabled={authLoading}
                 className="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl font-black text-base hover:opacity-90 transition-all flex items-center justify-center gap-3 disabled:opacity-50 mb-4">
                 {authLoading ? <Loader2 size={18} className="animate-spin" /> :
-                  authMode === 'login' ? 'Влез' : authMode === 'register' ? 'Регистрирай се' : 'Потвърди'}
+                  authMode === 'login' ? t('auth.btn.login') : authMode === 'register' ? t('auth.btn.register') : t('auth.btn.confirm')}
               </button>
 
               <p className="text-center text-sm text-gray-500">
                 {authMode === 'login' ? (
-                  <>Нямаш акаунт?{' '}
-                    <button onClick={() => { setAuthMode('register'); setError(''); }} className="text-blue-400 hover:underline">Регистрирай се</button>
+                  <>{t('auth.noAccount')}{' '}
+                    <button onClick={() => { setAuthMode('register'); setError(''); }} className="text-blue-400 hover:underline">{t('auth.registerLink')}</button>
                   </>
                 ) : authMode === 'register' ? (
-                  <>Вече имаш акаунт?{' '}
-                    <button onClick={() => { setAuthMode('login'); setError(''); }} className="text-blue-400 hover:underline">Влез</button>
+                  <>{t('auth.haveAccount')}{' '}
+                    <button onClick={() => { setAuthMode('login'); setError(''); }} className="text-blue-400 hover:underline">{t('auth.loginLink')}</button>
                   </>
                 ) : null}
               </p>
@@ -298,21 +301,20 @@ export default function App() {
             className="relative z-10 max-w-4xl mx-auto px-6 py-24 text-center">
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
               className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-2 text-xs text-blue-400 font-medium mb-8">
-              <Zap size={12} /> B2B Промишлен AI — директно от производителя
+              <Zap size={12} /> {t('search.badge')}
             </motion.div>
 
             <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
               className="text-5xl md:text-7xl font-black tracking-tight mb-6 leading-[1.05]">
-              Намери всеки<br />
-              <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">B2B продукт</span>
-              <br />на фабрична цена
+              {t('search.h1a')}<br />
+              <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">{t('search.h1b')}</span>
+              <br />{t('search.h1c')}
             </motion.h1>
 
             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
               className="text-gray-400 text-lg mb-12 max-w-2xl mx-auto leading-relaxed">
-              Директен достъп до производителя — без прекупвачи. Средно{' '}
-              <span className="text-white font-bold">31% под пазарна цена</span>.
-              Landed Cost калкулатор. DHL логистика. Ценов одит.
+              {t('search.subA')}{' '}
+              <span className="text-white font-bold">{t('search.subHighlight')}</span>{t('search.subB')}
             </motion.p>
 
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
@@ -322,12 +324,12 @@ export default function App() {
                   <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
                   <input type="text" value={query} onChange={e => setQuery(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleDemoSearch()}
-                    placeholder={`Напр. "${DEMO_QUERIES[placeholderIdx]}"`}
+                    placeholder={`${t('search.egPrefix')} "${DEMO_QUERIES[placeholderIdx]}"`}
                     className="w-full bg-white/5 border border-white/10 rounded-2xl pl-14 pr-5 py-5 text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50 text-base transition-all" />
                 </div>
                 <button onClick={() => handleDemoSearch()} disabled={loading || !query.trim()}
                   className="px-8 py-5 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl font-bold text-sm tracking-wide hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 flex items-center gap-2 shadow-lg shadow-blue-500/30">
-                  {loading ? <Loader2 size={18} className="animate-spin" /> : 'Търси'}
+                  {loading ? <Loader2 size={18} className="animate-spin" /> : t('search.btn')}
                 </button>
               </div>
               {error && <div className="text-red-400 text-sm mt-3 bg-red-400/10 rounded-xl px-4 py-3">{error}</div>}
@@ -345,12 +347,33 @@ export default function App() {
 
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
               className="grid grid-cols-3 gap-6 max-w-lg mx-auto">
-              {[['20,000+', 'B2B продукта'], ['30–38%', 'средна отстъпка FOB'], ['CN → BG', 'директна доставка']].map(([val, label]) => (
+              {[['20,000+', t('stats.products')], ['30–38%', t('stats.discount')], ['CN → BG', t('stats.delivery')]].map(([val, label]) => (
                 <div key={label} className="text-center">
                   <div className="text-2xl font-black text-white mb-1">{val}</div>
                   <div className="text-xs text-gray-500 font-medium">{label}</div>
                 </div>
               ))}
+            </motion.div>
+
+            {/* How it works */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}
+              className="mt-20 max-w-4xl mx-auto">
+              <h2 className="text-2xl font-black mb-8">{t('how.title')}</h2>
+              <div className="grid md:grid-cols-3 gap-5 text-left">
+                {[
+                  { icon: Search, t: t('how.s1t'), d: t('how.s1d') },
+                  { icon: Calculator, t: t('how.s2t'), d: t('how.s2d') },
+                  { icon: Truck, t: t('how.s3t'), d: t('how.s3d') },
+                ].map(({ icon: Icon, t: title, d }) => (
+                  <div key={title} className="bg-white/3 border border-white/10 rounded-2xl p-6">
+                    <div className="w-10 h-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center mb-4">
+                      <Icon size={18} className="text-blue-400" />
+                    </div>
+                    <div className="font-bold mb-2">{title}</div>
+                    <p className="text-sm text-gray-400 leading-relaxed">{d}</p>
+                  </div>
+                ))}
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -361,9 +384,9 @@ export default function App() {
             className="relative z-10 max-w-4xl mx-auto px-6 py-12">
             <button onClick={() => { setView('search'); setShowPaywall(false); }}
               className="flex items-center gap-2 text-gray-500 hover:text-white text-sm mb-8 transition-colors">
-              ← Ново търсене
+              {t('result.back')}
             </button>
-            <div className="text-xs text-blue-400 font-mono tracking-wider mb-4">ДЕМО РЕЗУЛТАТ — 1 безплатно търсене</div>
+            <div className="text-xs text-blue-400 font-mono tracking-wider mb-4">{t('result.demoBadge')}</div>
 
             <div className="bg-white/3 border border-white/10 rounded-3xl p-8 mb-6">
               <div className="flex items-start justify-between gap-4 mb-6">
@@ -381,9 +404,9 @@ export default function App() {
 
               <div className="grid grid-cols-3 gap-4 mb-6">
                 {[
-                  { icon: MapPin, label: 'Склад', value: demoResult.warehouse },
-                  { icon: Clock, label: 'Доставка', value: `${demoResult.delivery_days} дни` },
-                  { icon: Package, label: 'МОК', value: `${demoResult.moq} бр.` },
+                  { icon: MapPin, label: t('result.warehouse'), value: demoResult.warehouse },
+                  { icon: Clock, label: t('result.delivery'), value: t('result.days', { n: demoResult.delivery_days }) },
+                  { icon: Package, label: t('result.moq'), value: t('result.pcs', { n: demoResult.moq }) },
                 ].map(({ icon: Icon, label, value }) => (
                   <div key={label} className="bg-white/3 rounded-2xl p-4">
                     <Icon size={14} className="text-gray-500 mb-2" />
@@ -397,20 +420,20 @@ export default function App() {
               <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl p-6 mb-6">
                 <div className="flex items-center gap-2 mb-4">
                   <TrendingDown size={16} className="text-green-400" />
-                  <span className="text-sm font-bold text-green-400">ROI ДОКАЗАТЕЛСТВО</span>
+                  <span className="text-sm font-bold text-green-400">{t('result.roiTitle')}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="text-center">
                     <div className="text-2xl font-black text-green-400">{fmt(demoResult.factory_price - demoResult.negotiated_price)}</div>
-                    <div className="text-xs text-gray-400 mt-1">спестено на поръчка</div>
+                    <div className="text-xs text-gray-400 mt-1">{t('result.savedPerOrder')}</div>
                   </div>
                   <div className="text-center border-l border-r border-white/10">
                     <div className="text-2xl font-black text-blue-400">{fmt((demoResult.factory_price - demoResult.negotiated_price) * 12)}</div>
-                    <div className="text-xs text-gray-400 mt-1">ROI за 12 месеца</div>
+                    <div className="text-xs text-gray-400 mt-1">{t('result.roi12')}</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-black text-purple-400">{demoResult.discount_pct}%</div>
-                    <div className="text-xs text-gray-400 mt-1">под пазарна цена</div>
+                    <div className="text-xs text-gray-400 mt-1">{t('result.belowMarket')}</div>
                   </div>
                 </div>
               </div>
@@ -427,20 +450,20 @@ export default function App() {
                   <div className="bg-white/3 border border-white/10 rounded-2xl p-6 mb-6">
                     <div className="flex items-center gap-2 mb-5">
                       <Calculator size={16} className="text-blue-400" />
-                      <span className="text-sm font-bold text-blue-400">LANDED COST КАЛКУЛАТОР</span>
-                      <span className="text-xs text-gray-500 ml-auto">транспорт · мита · застраховка</span>
+                      <span className="text-sm font-bold text-blue-400">{t('lc.title')}</span>
+                      <span className="text-xs text-gray-500 ml-auto">{t('lc.sub')}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-4 mb-5">
                       <div>
                         <div className="flex justify-between text-xs text-gray-400 mb-2">
-                          <span>Количество</span><span className="font-bold text-white">{lcQty} бр.</span>
+                          <span>{t('lc.qty')}</span><span className="font-bold text-white">{t('result.pcs', { n: lcQty })}</span>
                         </div>
                         <input type="range" min={1} max={200} value={lcQty} onChange={e => setLcQty(+e.target.value)}
                           className="w-full accent-blue-500 cursor-pointer" />
                       </div>
                       <div>
                         <div className="flex justify-between text-xs text-gray-400 mb-2">
-                          <span>Твой марж</span><span className="font-bold text-white">{lcMargin}%</span>
+                          <span>{t('lc.margin')}</span><span className="font-bold text-white">{lcMargin}%</span>
                         </div>
                         <input type="range" min={10} max={80} value={lcMargin} onChange={e => setLcMargin(+e.target.value)}
                           className="w-full accent-purple-500 cursor-pointer" />
@@ -448,10 +471,10 @@ export default function App() {
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs mb-4">
                       {[
-                        ['Продуктова цена', fmt(demoResult.negotiated_price * lcQty)],
-                        ['DHL транспорт', fmt(transport)],
-                        ['Мита (3.4%)', fmt(duties)],
-                        ['Застраховка (0.8%)', fmt(insurance)],
+                        [t('lc.productPrice'), fmt(demoResult.negotiated_price * lcQty)],
+                        [t('lc.transport'), fmt(transport)],
+                        [t('lc.duties'), fmt(duties)],
+                        [t('lc.insurance'), fmt(insurance)],
                       ].map(([label, val]) => (
                         <div key={label} className="flex justify-between bg-white/3 rounded-xl px-3 py-2">
                           <span className="text-gray-500">{label}</span>
@@ -462,15 +485,15 @@ export default function App() {
                     <div className="grid grid-cols-3 gap-3 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-2xl p-4">
                       <div className="text-center">
                         <div className="text-lg font-black">{fmtDec(totalCost / lcQty)}</div>
-                        <div className="text-xs text-gray-500">landed cost / бр.</div>
+                        <div className="text-xs text-gray-500">{t('lc.landedPer')}</div>
                       </div>
                       <div className="text-center border-l border-r border-white/10">
                         <div className="text-lg font-black text-purple-400">{fmtDec(sellPrice)}</div>
-                        <div className="text-xs text-gray-500">продажна / бр.</div>
+                        <div className="text-xs text-gray-500">{t('lc.sellPer')}</div>
                       </div>
                       <div className="text-center">
                         <div className="text-lg font-black text-green-400">{fmt(profit)}</div>
-                        <div className="text-xs text-gray-500">чиста печалба</div>
+                        <div className="text-xs text-gray-500">{t('lc.profit')}</div>
                       </div>
                     </div>
                   </div>
@@ -481,9 +504,9 @@ export default function App() {
             {/* Locked features */}
             <div className="grid grid-cols-3 gap-4 mb-8 opacity-50">
               {[
-                { icon: Truck, label: 'DHL Логистика', sub: 'Реална цена Шенджен → BG' },
-                { icon: BarChart3, label: 'Ценови Одит', sub: 'Google Shopping · 50+ оферти' },
-                { icon: Brain, label: 'AI Препоръки', sub: 'Подобни продукти · ML модел' },
+                { icon: Truck, label: t('locked.dhl'), sub: t('locked.dhlSub') },
+                { icon: BarChart3, label: t('locked.audit'), sub: t('locked.auditSub') },
+                { icon: Brain, label: t('locked.ai'), sub: t('locked.aiSub') },
               ].map(({ icon: Icon, label, sub }) => (
                 <div key={label} className="bg-white/3 border border-white/5 rounded-2xl p-4 relative">
                   <div className="absolute inset-0 bg-black/40 rounded-2xl backdrop-blur-[2px] flex items-center justify-center">
@@ -498,7 +521,7 @@ export default function App() {
 
             <button onClick={() => setShowPaywall(true)}
               className="w-full py-5 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl font-black text-lg tracking-wide hover:opacity-90 transition-all flex items-center justify-center gap-3 shadow-xl shadow-blue-500/30">
-              Отключи пълния достъп — от 9.90 EUR <ArrowRight size={20} />
+              {t('result.unlock')} <ArrowRight size={20} />
             </button>
           </motion.div>
         )}
@@ -509,22 +532,22 @@ export default function App() {
             className="relative z-10 max-w-6xl mx-auto px-6 py-12">
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="text-2xl font-black">B2B Каталог</h2>
-                <p className="text-gray-500 text-sm">{displayed.length} продукта · Директно от производителя</p>
+                <h2 className="text-2xl font-black">{t('catalog.title')}</h2>
+                <p className="text-gray-500 text-sm">{t('catalog.count', { n: displayed.length })}</p>
               </div>
             </div>
 
             {catalog.length === 0 ? (
               <div className="text-center py-24 text-gray-500">
                 <Loader2 size={32} className="animate-spin mx-auto mb-4" />
-                Зарежда каталог...
+                {t('catalog.loading')}
               </div>
             ) : (
               <>
                 <div className="relative mb-6">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
                   <input value={catalogQuery} onChange={e => setCatalogQuery(e.target.value)}
-                    placeholder="Търси продукт, категория, доставчик..."
+                    placeholder={t('catalog.searchPh')}
                     className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-3.5 text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50 text-sm transition-all" />
                 </div>
 
@@ -545,15 +568,15 @@ export default function App() {
                           <div className="text-xs text-gray-600 line-through">{fmt(p.factory_price)}</div>
                         </div>
                         <div className="text-right text-xs text-gray-500">
-                          <div>{p.delivery_days} дни</div>
-                          <div>MOQ {p.moq}</div>
+                          <div>{t('result.days', { n: p.delivery_days })}</div>
+                          <div>{t('catalog.moq', { n: p.moq })}</div>
                         </div>
                       </div>
                     </motion.div>
                   ))}
                 </div>
                 {displayed.length > 60 && (
-                  <p className="text-center text-gray-500 text-sm mt-6">Показани 60 от {displayed.length} — използвай търсачката</p>
+                  <p className="text-center text-gray-500 text-sm mt-6">{t('catalog.shown', { n: displayed.length })}</p>
                 )}
               </>
             )}
@@ -577,19 +600,19 @@ export default function App() {
                 <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/30">
                   <Package size={24} />
                 </div>
-                <h2 className="text-2xl font-black mb-2">Отключи пълния достъп</h2>
-                <p className="text-gray-400 text-sm">Неограничено търсене · DHL логистика · AI препоръки · Ценов одит</p>
+                <h2 className="text-2xl font-black mb-2">{t('pay.title')}</h2>
+                <p className="text-gray-400 text-sm">{t('pay.sub')}</p>
               </div>
 
               {demoResult && (
                 <div className="bg-green-500/8 border border-green-500/15 rounded-2xl p-4 mb-5">
-                  <div className="text-xs text-green-400 font-bold mb-2">ВЪЗ ОСНОВА НА ДЕМОТО ТИ:</div>
+                  <div className="text-xs text-green-400 font-bold mb-2">{t('pay.basedOn')}</div>
                   <div className="flex justify-between text-sm mt-1">
-                    <span className="text-gray-400">Спестено на поръчка</span>
+                    <span className="text-gray-400">{t('pay.savedPerOrder')}</span>
                     <span className="font-bold text-green-400">{fmt(demoResult.factory_price - demoResult.negotiated_price)}</span>
                   </div>
                   <div className="flex justify-between text-sm mt-1 pt-2 border-t border-white/5">
-                    <span className="text-gray-400">ROI в посока 9.90 EUR/мес.</span>
+                    <span className="text-gray-400">{t('pay.roiLine')}</span>
                     <span className="font-black text-green-400">{Math.round((demoResult.factory_price - demoResult.negotiated_price) / 9.9)}x</span>
                   </div>
                 </div>
@@ -600,9 +623,9 @@ export default function App() {
               {/* Plans */}
               <div className="grid grid-cols-3 gap-2 mb-5">
                 {[
-                  { id: 'starter', name: 'Стартер', price: '9.90', desc: '50 търсения', features: ['Каталог', 'Landed Cost'] },
-                  { id: 'pro', name: 'Про', price: '49', desc: 'Неограничени', features: ['+ AI препоръки', '+ Ценов одит'], highlight: true },
-                  { id: 'business', name: 'Business', price: '149', desc: 'Multi-user', features: ['+ ERP export', '+ AI договори'] },
+                  { id: 'starter', name: t('plan.starter'), price: '9.90', desc: t('plan.starter.desc'), features: [t('plan.starter.f1'), t('plan.starter.f2')] },
+                  { id: 'pro', name: t('plan.pro'), price: '49', desc: t('plan.pro.desc'), features: [t('plan.pro.f1'), t('plan.pro.f2')], highlight: true },
+                  { id: 'business', name: t('plan.business'), price: '149', desc: t('plan.business.desc'), features: [t('plan.business.f1'), t('plan.business.f2')] },
                 ].map(plan => (
                   <button key={plan.id} onClick={() => handlePay(plan.id as any)}
                     disabled={loading}
@@ -610,7 +633,7 @@ export default function App() {
                       plan.highlight ? 'border-blue-500/60 bg-blue-500/10 hover:bg-blue-500/20' : 'border-white/10 bg-white/3 hover:bg-white/6'
                     }`}>
                     <div className={`text-[11px] font-bold mb-1 ${plan.highlight ? 'text-blue-400' : 'text-gray-400'}`}>{plan.name}</div>
-                    <div className="text-lg font-black">{plan.price} <span className="text-[10px] font-normal text-gray-400">€/мес</span></div>
+                    <div className="text-lg font-black">{plan.price} <span className="text-[10px] font-normal text-gray-400">{t('pay.perMonth')}</span></div>
                     <div className="text-[10px] text-gray-500 mt-0.5">{plan.desc}</div>
                     {plan.features.map(f => (
                       <div key={f} className="text-[10px] text-gray-600 mt-0.5">{f}</div>
@@ -621,20 +644,52 @@ export default function App() {
 
               <button onClick={() => handlePay('trial')} disabled={loading}
                 className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl font-black text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-500/20 mb-3">
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <>Пробвай 1 търсене — 0.99 EUR <ArrowRight size={16} /></>}
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <>{t('pay.trial')} <ArrowRight size={16} /></>}
               </button>
 
               {!user && (
                 <button onClick={() => { setShowPaywall(false); setView('auth'); setAuthMode('register'); }}
                   className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl text-sm text-gray-400 hover:text-white hover:bg-white/8 transition-all">
-                  Нямаш акаунт? Регистрирай се безплатно
+                  {t('pay.noAccountCta')}
                 </button>
               )}
 
               <p className="text-center text-xs text-gray-600 mt-3 flex items-center justify-center gap-2">
-                <ShieldCheck size={12} /> Stripe · Сигурно плащане · Отказ по всяко време
+                <ShieldCheck size={12} /> {t('pay.secure')}
               </p>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Language switcher ───────────────────────────────────────
+function LangSwitcher({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
+  const [open, setOpen] = useState(false);
+  const meta = LANG_META[lang];
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors px-2.5 py-1.5 rounded-full border border-white/10 hover:border-white/20">
+        <span>{meta.flag}</span>
+        <span className="hidden sm:inline">{lang.toUpperCase()}</span>
+        <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+            className="absolute right-0 mt-2 w-40 bg-[#0d1118] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+            {LANGS.map(l => (
+              <button key={l} onMouseDown={() => { setLang(l); setOpen(false); }}
+                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-left transition-colors hover:bg-white/5 ${
+                  l === lang ? 'text-white bg-white/5' : 'text-gray-400'
+                }`}>
+                <span>{LANG_META[l].flag}</span>
+                <span>{LANG_META[l].native}</span>
+              </button>
+            ))}
           </motion.div>
         )}
       </AnimatePresence>
