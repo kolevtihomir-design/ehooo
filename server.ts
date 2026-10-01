@@ -15,6 +15,7 @@ import { startAgents } from './src/agents/scheduler.js';
 import { listDrafts, setDraftStatus, draftCounts } from './src/agents/agentDb.js';
 import { runMarketingAgent } from './src/agents/marketingTask.js';
 import { runSalesAgent } from './src/agents/salesTask.js';
+import { AGENT_ADMIN_HTML } from './src/agents/adminPage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -641,6 +642,11 @@ async function startServer() {
     const which = req.body?.agent;
     if (which === 'sales') return res.json({ success: true, ...(await runSalesAgent(req.body?.company)) });
     return res.json({ success: true, ...(await runMarketingAgent()) });
+  });
+
+  // ── AGENT REVIEW UI (self-contained admin page) ──────
+  app.get('/admin/agents', (_req, res) => {
+    res.type('html').send(AGENT_ADMIN_HTML);
   });
 
   // ── LEGACY ROUTES (backward compat) ─────────────────
