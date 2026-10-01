@@ -11,6 +11,10 @@ import {
   db, getAllProducts, upsertProduct, deleteProduct, getProductById,
   saveSession, sessionExists, dbCacheGet, dbCacheSet, getAnalytics, bumpAnalytics,
 } from './src/db.js';
+import { startAgents } from './src/agents/scheduler.js';
+import { listDrafts, setDraftStatus, draftCounts } from './src/agents/agentDb.js';
+import { runMarketingAgent } from './src/agents/marketingTask.js';
+import { runSalesAgent } from './src/agents/salesTask.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -619,6 +623,26 @@ async function startServer() {
     res.json({ success: true, analytics: a, recent_orders: recent });
   });
 
+  // ── AGENT DRAFTS (AI-generated marketing/sales copy, human-approved) ──
+  app.get('/api/admin/agent/drafts', adminAuth, (req, res) => {
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    res.json({ success: true, counts: draftCounts(), drafts: listDrafts(status) });
+  });
+  app.post('/api/admin/agent/drafts/:id/approve', adminAuth, (req, res) => {
+    const d = setDraftStatus(Number(req.params.id), 'approved', req.body?.note);
+    res.json({ success: !!d, draft: d });
+  });
+  app.post('/api/admin/agent/drafts/:id/reject', adminAuth, (req, res) => {
+    const d = setDraftStatus(Number(req.params.id), 'rejected', req.body?.note);
+    res.json({ success: !!d, draft: d });
+  });
+  // Manual trigger — generate a draft on demand (for testing, no sending).
+  app.post('/api/admin/agent/run', adminAuth, async (req, res) => {
+    const which = req.body?.agent;
+    if (which === 'sales') return res.json({ success: true, ...(await runSalesAgent(req.body?.company)) });
+    return res.json({ success: true, ...(await runMarketingAgent()) });
+  });
+
   // ── LEGACY ROUTES (backward compat) ─────────────────
   app.get('/api/status', (_req, res) => {
     res.json({ openRouter: !!process.env.OPENROUTER_API_KEY, clickUp: !!process.env.CLICKUP_API_KEY, appUrl: true });
@@ -654,6 +678,7 @@ async function startServer() {
     console.log(`   SerpAPI:  ${process.env.SERPAPI_KEY ? 'configured' : 'market-model fallback'}`);
     console.log(`   HuggingFace: ${process.env.HF_API_TOKEN ? 'configured' : 'TF-IDF mode'}`);
     console.log(`   Stripe: ${process.env.STRIPE_SECRET_KEY?.startsWith('sk_live') ? 'LIVE' : process.env.STRIPE_SECRET_KEY ? 'test' : 'missing'}\n`);
+    startAgents();
   });
 }
 
