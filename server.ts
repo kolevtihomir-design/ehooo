@@ -640,8 +640,9 @@ async function startServer() {
   // Manual trigger — generate a draft on demand (for testing, no sending).
   app.post('/api/admin/agent/run', adminAuth, async (req, res) => {
     const which = req.body?.agent;
-    if (which === 'sales') return res.json({ success: true, ...(await runSalesAgent(req.body?.company)) });
-    return res.json({ success: true, ...(await runMarketingAgent()) });
+    const market = req.body?.market;
+    if (which === 'sales') return res.json({ success: true, ...(await runSalesAgent(req.body?.company, market)) });
+    return res.json({ success: true, ...(await runMarketingAgent(market)) });
   });
 
   // ── AGENT REVIEW UI (self-contained admin page) ──────

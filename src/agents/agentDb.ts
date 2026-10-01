@@ -21,6 +21,12 @@ db.exec(`
   );
 `);
 
+// Add the market/language column if an older DB predates it.
+{
+  const cols = (db.prepare('PRAGMA table_info(agent_drafts)').all() as any[]).map((c) => c.name);
+  if (!cols.includes('lang')) db.exec("ALTER TABLE agent_drafts ADD COLUMN lang TEXT NOT NULL DEFAULT 'bg'");
+}
+
 export interface DraftInput {
   agent: 'marketing' | 'sales';
   channel: 'social' | 'email';
@@ -28,16 +34,20 @@ export interface DraftInput {
   subject?: string | null;
   content: string;
   model: string;
+  lang?: string;
   note?: string | null;
 }
 
 export function insertDraft(d: DraftInput): number {
   const res = db
     .prepare(
-      `INSERT INTO agent_drafts (agent, channel, product_id, subject, content, model, note)
-       VALUES (?,?,?,?,?,?,?)`
+      `INSERT INTO agent_drafts (agent, channel, product_id, subject, content, model, lang, note)
+       VALUES (?,?,?,?,?,?,?,?)`
     )
-    .run(d.agent, d.channel, d.product_id ?? null, d.subject ?? null, d.content, d.model, d.note ?? null);
+    .run(
+      d.agent, d.channel, d.product_id ?? null, d.subject ?? null,
+      d.content, d.model, d.lang ?? 'bg', d.note ?? null
+    );
   return Number(res.lastInsertRowid);
 }
 

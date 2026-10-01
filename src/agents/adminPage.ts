@@ -40,6 +40,13 @@ export const AGENT_ADMIN_HTML = `<!DOCTYPE html>
     <option value="rejected">Отхвърлени</option>
     <option value="">Всички</option>
   </select>
+  <select id="market" title="Държава / език">
+    <option value="bg">🇧🇬 BG</option>
+    <option value="ro">🇷🇴 RO</option>
+    <option value="el">🇬🇷 GR</option>
+    <option value="de">🇩🇪 DE</option>
+    <option value="pl">🇵🇱 PL</option>
+  </select>
   <button class="p" onclick="run('marketing')">+ Маркетинг пост</button>
   <button class="p" onclick="run('sales')">+ Търговски имейл</button>
   <button class="s" onclick="load()">↻ Обнови</button>
@@ -78,6 +85,7 @@ function render(x){
       <span class="tag">\${x.agent==='sales'?'📧 Продажби':'📣 Маркетинг'}</span>
       <span class="tag">\${x.channel}</span>
       <span class="tag">продукт #\${x.product_id||'-'}</span>
+      <span class="tag">🌍 \${(x.lang||'bg').toUpperCase()}</span>
       <span class="tag">\${x.model}</span>
       <span class="st-\${x.status}">\${x.status}</span>
     </div>\${subj}
@@ -91,7 +99,7 @@ async function act(id, what){
   load();
 }
 async function run(agent){
-  const body = JSON.stringify({ agent });
+  const body = JSON.stringify({ agent, market: $('market').value });
   const r = await fetch('/api/admin/agent/run', { method:'POST', headers: hdr(), body });
   const d = await r.json();
   if(d.error) alert('Грешка: '+d.error);

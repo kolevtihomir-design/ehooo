@@ -1,12 +1,12 @@
-// Sales agent — generates a personalized B2B cold-email DRAFT for a product.
-// DRY-RUN & consent-safe: it does NOT scrape leads and does NOT send anything.
-// It writes a reusable draft (optionally aimed at a company name you provide),
-// which you review and send yourself to contacts that have agreed to be
-// contacted — keeping it GDPR-compliant.
+// Sales agent — generates a personalized B2B sales-email DRAFT for a product,
+// in the target market's language. DRY-RUN & consent-safe: it does NOT scrape
+// leads and does NOT send anything. You review and send yourself to contacts
+// that agreed to be contacted (GDPR-compliant).
 
 import { db } from '../db.js';
 import { generateText } from './openRouterClient.js';
 import { insertDraft } from './agentDb.js';
+import { LANGS, pickMarket, randomMarket, type Market } from './langs.js';
 
 function pickRandomProduct(): any {
   return db
@@ -15,37 +15,40 @@ function pickRandomProduct(): any {
 }
 
 export async function runSalesAgent(
-  targetCompany?: string
+  targetCompany?: string,
+  market?: Market
 ): Promise<{ ok: boolean; draftId?: number; error?: string }> {
   try {
     const p = pickRandomProduct();
     if (!p) return { ok: false, error: 'no active products' };
 
+    const m = market ? pickMarket(market) : randomMarket();
+    const lang = LANGS[m];
     const model = process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.1-8b-instruct:free';
-    const who = targetCompany?.trim() || 'компания от производствения сектор';
+    const who = targetCompany?.trim() || 'a company in the manufacturing sector';
 
     const content = await generateText({
       model,
       maxTokens: 450,
       system:
-        'Ти си B2B търговски представител на AI-Pokupki. Пишеш кратки, учтиви ' +
-        'и персонализирани имейли на български. Никакъв спам, никакви измислени ' +
-        'факти. Тонът е професионален и полезен, не агресивен.',
+        `You are a B2B sales rep for AI-Pokupki. Write short, polite, personalized ` +
+        `emails. No spam, no invented facts. Professional and helpful, not pushy. ` +
+        `IMPORTANT: write the entire email in ${lang.name} (${lang.native}).`,
       user:
-        `Напиши кратък имейл за продажба (макс 120 думи) до ${who}, предлагащ този продукт:\n` +
-        `Име: ${p.name}\nКатегория: ${p.category}\nЦена: €${p.negotiated_price} ` +
-        `(отстъпка ${p.discount_pct}% от €${p.factory_price})\nДоставка: ${p.delivery_days} дни.\n` +
-        `Започни с уважителен поздрав, обясни стойността накратко, и завърши с ясна покана за среща/оферта. ` +
-        `Добави и ред "Относно:" на първия ред.`,
+        `Write a short sales email (max 120 words) to ${who}, offering this product. ` +
+        `Write it in ${lang.name}:\n` +
+        `Name: ${p.name}\nCategory: ${p.category}\nPrice: €${p.negotiated_price} ` +
+        `(${p.discount_pct}% off €${p.factory_price})\nDelivery: ${p.delivery_days} days.\n` +
+        `Start with a respectful greeting, explain the value briefly, end with a clear ` +
+        `call to a meeting/quote. Put a subject line as the first line prefixed with "SUBJECT:".`,
     });
 
-    // Split "Относно:" subject line if the model included one.
-    let subject: string | null = `Оферта: ${p.name}`;
+    let subject: string | null = `Offer: ${p.name}`;
     let body = content;
-    const m = content.match(/^\s*Относно:\s*(.+)\s*\n+([\s\S]+)$/i);
-    if (m) {
-      subject = m[1].trim();
-      body = m[2].trim();
+    const mm = content.match(/^\s*SUBJECT:\s*(.+)\s*\n+([\s\S]+)$/i);
+    if (mm) {
+      subject = mm[1].trim();
+      body = mm[2].trim();
     }
 
     const draftId = insertDraft({
@@ -55,9 +58,10 @@ export async function runSalesAgent(
       subject,
       content: body,
       model,
+      lang: m,
       note: targetCompany ? `target: ${targetCompany}` : null,
     });
-    console.log(`[sales] draft #${draftId} generated for product ${p.id} (${p.name})`);
+    console.log(`[sales/${m}] draft #${draftId} for product ${p.id} (${p.name})`);
     return { ok: true, draftId };
   } catch (e: any) {
     console.error('[sales] failed:', e?.message || e);
