@@ -189,6 +189,14 @@ const STRINGS: Record<Lang, Dict> = {
     'pay.trial': 'Пробвай 1 търсене — 0.99 EUR',
     'pay.noAccountCta': 'Нямаш акаунт? Регистрирай се безплатно',
     'pay.secure': 'Stripe · Сигурно плащане · Отказ по всяко време',
+
+    'how.title': 'Как работи — за 3 стъпки',
+    'how.s1t': '1. Търси',
+    'how.s1d': 'Въведи какъвто и да е B2B продукт. AI намира производителя директно.',
+    'how.s2t': '2. Смятай',
+    'how.s2d': 'Виждаш landed cost, мита, транспорт и чистата си печалба на бройка.',
+    'how.s3t': '3. Поръчай',
+    'how.s3d': 'Купуваш директно от фабриката — средно 31% под пазара.',
   },
 
   // ─── Romanian ──────────────────────────────────────────────
@@ -294,6 +302,14 @@ const STRINGS: Record<Lang, Dict> = {
     'pay.trial': 'Încearcă 1 căutare — 0.99 EUR',
     'pay.noAccountCta': 'Nu ai cont? Înregistrează-te gratuit',
     'pay.secure': 'Stripe · Plată securizată · Anulare oricând',
+
+    'how.title': 'Cum funcționează — în 3 pași',
+    'how.s1t': '1. Caută',
+    'how.s1d': 'Introdu orice produs B2B. AI găsește producătorul direct.',
+    'how.s2t': '2. Calculează',
+    'how.s2d': 'Vezi landed cost, taxe, transport și profitul net pe bucată.',
+    'how.s3t': '3. Comandă',
+    'how.s3d': 'Cumperi direct din fabrică — în medie 31% sub piață.',
   },
 
   // ─── Greek ─────────────────────────────────────────────────
@@ -399,6 +415,14 @@ const STRINGS: Record<Lang, Dict> = {
     'pay.trial': 'Δοκίμασε 1 αναζήτηση — 0.99 EUR',
     'pay.noAccountCta': 'Δεν έχεις λογαριασμό; Εγγράψου δωρεάν',
     'pay.secure': 'Stripe · Ασφαλής πληρωμή · Ακύρωση ανά πάσα στιγμή',
+
+    'how.title': 'Πώς λειτουργεί — σε 3 βήματα',
+    'how.s1t': '1. Αναζήτησε',
+    'how.s1d': 'Πληκτρολόγησε οποιοδήποτε προϊόν B2B. Το AI βρίσκει τον κατασκευαστή απευθείας.',
+    'how.s2t': '2. Υπολόγισε',
+    'how.s2d': 'Βλέπεις landed cost, δασμούς, μεταφορά και το καθαρό κέρδος ανά τεμάχιο.',
+    'how.s3t': '3. Παράγγειλε',
+    'how.s3d': 'Αγοράζεις απευθείας από το εργοστάσιο — κατά μέσο όρο 31% κάτω από την αγορά.',
   },
 
   // ─── German ────────────────────────────────────────────────
@@ -504,6 +528,14 @@ const STRINGS: Record<Lang, Dict> = {
     'pay.trial': '1 Suche testen — 0,99 EUR',
     'pay.noAccountCta': 'Kein Konto? Kostenlos registrieren',
     'pay.secure': 'Stripe · Sichere Zahlung · Jederzeit kündbar',
+
+    'how.title': 'So funktioniert es — in 3 Schritten',
+    'how.s1t': '1. Suchen',
+    'how.s1d': 'Gib ein beliebiges B2B-Produkt ein. Die KI findet den Hersteller direkt.',
+    'how.s2t': '2. Berechnen',
+    'how.s2d': 'Du siehst Landed Cost, Zölle, Transport und deinen Nettogewinn pro Stück.',
+    'how.s3t': '3. Bestellen',
+    'how.s3d': 'Kaufe direkt ab Werk — im Schnitt 31% unter Marktpreis.',
   },
 
   // ─── Polish ────────────────────────────────────────────────
@@ -609,6 +641,14 @@ const STRINGS: Record<Lang, Dict> = {
     'pay.trial': 'Wypróbuj 1 wyszukiwanie — 0.99 EUR',
     'pay.noAccountCta': 'Nie masz konta? Zarejestruj się za darmo',
     'pay.secure': 'Stripe · Bezpieczna płatność · Anuluj w każdej chwili',
+
+    'how.title': 'Jak to działa — w 3 krokach',
+    'how.s1t': '1. Szukaj',
+    'how.s1d': 'Wpisz dowolny produkt B2B. AI znajduje producenta bezpośrednio.',
+    'how.s2t': '2. Licz',
+    'how.s2d': 'Widzisz landed cost, cła, transport i zysk netto na sztukę.',
+    'how.s3t': '3. Zamów',
+    'how.s3d': 'Kupujesz bezpośrednio z fabryki — średnio 31% poniżej rynku.',
   },
 };
 

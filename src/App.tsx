@@ -354,6 +354,27 @@ export default function App() {
                 </div>
               ))}
             </motion.div>
+
+            {/* How it works */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}
+              className="mt-20 max-w-4xl mx-auto">
+              <h2 className="text-2xl font-black mb-8">{t('how.title')}</h2>
+              <div className="grid md:grid-cols-3 gap-5 text-left">
+                {[
+                  { icon: Search, t: t('how.s1t'), d: t('how.s1d') },
+                  { icon: Calculator, t: t('how.s2t'), d: t('how.s2d') },
+                  { icon: Truck, t: t('how.s3t'), d: t('how.s3d') },
+                ].map(({ icon: Icon, t: title, d }) => (
+                  <div key={title} className="bg-white/3 border border-white/10 rounded-2xl p-6">
+                    <div className="w-10 h-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center mb-4">
+                      <Icon size={18} className="text-blue-400" />
+                    </div>
+                    <div className="font-bold mb-2">{title}</div>
+                    <p className="text-sm text-gray-400 leading-relaxed">{d}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
           </motion.div>
         )}
 
